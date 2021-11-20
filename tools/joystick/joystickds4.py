@@ -36,7 +36,7 @@ class Joystick:
   def __init__(self):
     self.max_axis_value = 255  # tune based on your joystick, 0 to this
     self.cancel_button = 'BTN_TRIGGER'
-    self.axes_values = {'ABS_RY': 0., 'ABS_X': 0.}  # gb, steer
+    self.axes_values = {'T': 0., 'ABS_X': 0.}  # gb, steer
 
   def update(self):
     joystick_event = get_gamepad()[0]
@@ -46,8 +46,15 @@ class Joystick:
     if event[0] == self.cancel_button and event[1] == 0:  # state 0 is falling edge
       self.cancel = True
     elif event[0] in self.axes_values:
-      norm = -interp(event[1], [0, self.max_axis_value], [-1., 1.])
-      self.axes_values[event[0]] = norm if abs(norm) > 0.05 else 0.  # center can be noisy, deadzone of 5%
+      if 'ABS_Z' in event[0]:
+        norm = -interp(event[1], [0, self.max_axis_value], [-1, 0])
+        self.axes_values['T'] = norm if abs(norm) > 0.05 else 0.  # center can be noisy, deadzone of 5%
+      elif 'ABS_RZ' in event[0]:
+        norm = -interp(event[1], [0, self.max_axis_value], [0, 1])
+        self.axes_values['T'] = norm if abs(norm) > 0.05 else 0.  # center can be noisy, deadzone of 5%
+      else:
+        norm = -interp(event[1], [0, self.max_axis_value], [-1., 1.])
+        self.axes_values[event[0]] = norm if abs(norm) > 0.05 else 0.  # center can be noisy, deadzone of 5%
     else:
       return False
     return True
