@@ -1,52 +1,79 @@
-#!/bin/bash -e
+#!/usr/bin/env bash
+set -e
 
-cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null
+DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null && pwd )"
+cd $DIR
 
-if ! command -v pyenv &> /dev/null; then
-  echo "please install pyenv ..."
-  echo "https://github.com/pyenv/pyenv-installer"
-  echo "example:"
-  echo "sudo apt-get update; sudo apt-get install --no-install-recommends make build-essential libssl-dev zlib1g-dev libbz2-dev libreadline-dev libsqlite3-dev wget curl llvm libncurses5-dev xz-utils tk-dev libxml2-dev libxmlsec1-dev libffi-dev liblzma-dev"
-  echo "curl https://pyenv.run | bash"
-  echo "echo 'export PYENV_ROOT=\"\$HOME/.pyenv\"' >> ~/.bashrc"
-  echo "echo 'export PATH=\"\$PYENV_ROOT/bin:\$PYENV_ROOT/shims:\$PATH\"' >> ~/.bashrc"
-  echo "exec \"\$SHELL\""
-  exit 1
+RC_FILE="${HOME}/.$(basename ${SHELL})rc"
+if [ "$(uname)" == "Darwin" ] && [ $SHELL == "/bin/bash" ]; then
+  RC_FILE="$HOME/.bash_profile"
+fi
+
+if ! command -v "pyenv" > /dev/null 2>&1; then
+  echo "pyenv install ..."
+  curl -L https://github.com/pyenv/pyenv-installer/raw/master/bin/pyenv-installer | bash
+
+  echo -e "\n. ~/.pyenvrc" >> $RC_FILE
+  cat <<EOF > "${HOME}/.pyenvrc"
+if [ -z "\$PYENV_ROOT" ]; then
+  export PATH=\$HOME/.pyenv/bin:\$HOME/.pyenv/shims:\$PATH
+  export PYENV_ROOT="\$HOME/.pyenv"
+  eval "\$(pyenv init -)"
+  eval "\$(pyenv virtualenv-init -)"
+fi
+EOF
+
+  # setup now without restarting shell
+  export PATH=$HOME/.pyenv/bin:$HOME/.pyenv/shims:$PATH
+  export PYENV_ROOT="$HOME/.pyenv"
+  eval "$(pyenv init -)"
+  eval "$(pyenv virtualenv-init -)"
 fi
 
 export MAKEFLAGS="-j$(nproc)"
 
 PYENV_PYTHON_VERSION=$(cat .python-version)
 if ! pyenv prefix ${PYENV_PYTHON_VERSION} &> /dev/null; then
-  echo "pyenv ${PYENV_PYTHON_VERSION} install ..."
-  CONFIGURE_OPTS=--enable-shared pyenv install -f ${PYENV_PYTHON_VERSION}
+  # no pyenv update on mac
+  if [ "$(uname)" == "Linux" ]; then
+    echo "pyenv update ..."
+    pyenv update
+  fi
+  echo "python ${PYENV_PYTHON_VERSION} install ..."
+  CONFIGURE_OPTS="--enable-shared" pyenv install -f ${PYENV_PYTHON_VERSION}
 fi
-
-if ! command -v pipenv &> /dev/null; then
-  echo "pipenv install ..."
-  pip install pipenv
-fi
+eval "$(pyenv init --path)"
 
 echo "update pip"
-pip install pip==21.3.1
-pip install pipenv==2021.5.29
+pip install pip==22.3.1
+pip install poetry==1.2.2
 
-echo "pip packages install ..."
-if [ -d "./xx" ]; then
-  PIPENV_PIPFILE=./xx/Pipfile pipenv install --system --dev --deploy
-  pipenv install --system --dev --deploy
-  RUN=""
-else
-  pipenv install --dev --deploy
-  RUN="pipenv run"
+poetry config virtualenvs.prefer-active-python true --local
+
+POETRY_INSTALL_ARGS=""
+if [ -d "./xx" ] || [ -n "$XX" ]; then
+  echo "WARNING: using xx dependency group, installing globally"
+  poetry config virtualenvs.create false --local
+  POETRY_INSTALL_ARGS="--with xx --sync"
 fi
 
-# update shims for newly installed executables (e.g. scons)
+echo "pip packages install..."
+poetry install --no-cache --no-root $POETRY_INSTALL_ARGS
 pyenv rehash
 
-echo "precommit install ..."
-$RUN pre-commit install
+if [ -d "./xx" ] || [ -n "$POETRY_VIRTUALENVS_CREATE" ]; then
+  RUN=""
+else
+  echo "PYTHONPATH=${PWD}" > .env
+  poetry self add poetry-dotenv-plugin@^0.1.0
+  RUN="poetry run"
+fi
 
-# for internal comma repos
-[ -d "./xx" ] && (cd xx && $RUN pre-commit install)
-[ -d "./notebooks" ] && (cd notebooks && $RUN pre-commit install)
+echo "pre-commit hooks install..."
+shopt -s nullglob
+for f in .pre-commit-config.yaml */.pre-commit-config.yaml; do
+  cd $DIR/$(dirname $f)
+  if [ -e ".git" ]; then
+    $RUN pre-commit install
+  fi
+done

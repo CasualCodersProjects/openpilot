@@ -1,7 +1,6 @@
 import numpy as np
 
 import common.transformations.orientation as orient
-from selfdrive.hardware import TICI
 
 ## -- hardcoded hardware params --
 eon_f_focal_length = 910.0
@@ -45,14 +44,9 @@ tici_fcam_intrinsics_inv = np.linalg.inv(tici_fcam_intrinsics)
 tici_ecam_intrinsics_inv = np.linalg.inv(tici_ecam_intrinsics)
 
 
-if not TICI:
-  FULL_FRAME_SIZE = eon_f_frame_size
-  FOCAL = eon_f_focal_length
-  fcam_intrinsics = eon_fcam_intrinsics
-else:
-  FULL_FRAME_SIZE = tici_f_frame_size
-  FOCAL = tici_f_focal_length
-  fcam_intrinsics = tici_fcam_intrinsics
+FULL_FRAME_SIZE = tici_f_frame_size
+FOCAL = tici_f_focal_length
+fcam_intrinsics = tici_fcam_intrinsics
 
 W, H = FULL_FRAME_SIZE[0], FULL_FRAME_SIZE[1]
 
@@ -83,6 +77,7 @@ def get_view_frame_from_road_frame(roll, pitch, yaw, height):
   return np.hstack((view_from_road, [[0], [height], [0]]))
 
 
+
 # aka 'extrinsic_matrix'
 def get_view_frame_from_calib_frame(roll, pitch, yaw, height):
   device_from_calib= orient.rot_from_euler([roll, pitch, yaw])
@@ -98,12 +93,6 @@ def vp_from_ke(m):
   The vanishing point is defined as lim x->infinity C (x, 0, 0, 1).T
   """
   return (m[0, 0]/m[2, 0], m[1, 0]/m[2, 0])
-
-
-def vp_from_rpy(rpy, intrinsics=fcam_intrinsics):
-  e = get_view_frame_from_road_frame(rpy[0], rpy[1], rpy[2], 1.22)
-  ke = np.dot(intrinsics, e)
-  return vp_from_ke(ke)
 
 
 def roll_from_ke(m):
@@ -125,7 +114,7 @@ def normalize(img_pts, intrinsics=fcam_intrinsics):
   return img_pts_normalized[:, :2].reshape(input_shape)
 
 
-def denormalize(img_pts, intrinsics=fcam_intrinsics, width=W, height=H):
+def denormalize(img_pts, intrinsics=fcam_intrinsics, width=np.inf, height=np.inf):
   # denormalizes image coordinates
   # accepts single pt or array of pts
   img_pts = np.array(img_pts)
@@ -133,10 +122,12 @@ def denormalize(img_pts, intrinsics=fcam_intrinsics, width=W, height=H):
   img_pts = np.atleast_2d(img_pts)
   img_pts = np.hstack((img_pts, np.ones((img_pts.shape[0], 1), dtype=img_pts.dtype)))
   img_pts_denormalized = img_pts.dot(intrinsics.T)
-  img_pts_denormalized[img_pts_denormalized[:, 0] > width] = np.nan
-  img_pts_denormalized[img_pts_denormalized[:, 0] < 0] = np.nan
-  img_pts_denormalized[img_pts_denormalized[:, 1] > height] = np.nan
-  img_pts_denormalized[img_pts_denormalized[:, 1] < 0] = np.nan
+  if np.isfinite(width):
+    img_pts_denormalized[img_pts_denormalized[:, 0] > width] = np.nan
+    img_pts_denormalized[img_pts_denormalized[:, 0] < 0] = np.nan
+  if np.isfinite(height):
+    img_pts_denormalized[img_pts_denormalized[:, 1] > height] = np.nan
+    img_pts_denormalized[img_pts_denormalized[:, 1] < 0] = np.nan
   return img_pts_denormalized[:, :2].reshape(input_shape)
 
 
@@ -167,11 +158,3 @@ def img_from_device(pt_device):
   pt_img = pt_view/pt_view[:, 2:3]
   return pt_img.reshape(input_shape)[:, :2]
 
-
-def get_camera_frame_from_calib_frame(camera_frame_from_road_frame, intrinsics=fcam_intrinsics):
-  camera_frame_from_ground = camera_frame_from_road_frame[:, (0, 1, 3)]
-  calib_frame_from_ground = np.dot(intrinsics,
-                                     get_view_frame_from_road_frame(0, 0, 0, 1.22))[:, (0, 1, 3)]
-  ground_from_calib_frame = np.linalg.inv(calib_frame_from_ground)
-  camera_frame_from_calib_frame = np.dot(camera_frame_from_ground, ground_from_calib_frame)
-  return camera_frame_from_calib_frame

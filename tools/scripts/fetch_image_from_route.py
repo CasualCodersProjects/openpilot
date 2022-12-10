@@ -2,7 +2,7 @@
 import sys
 
 if len(sys.argv) < 4:
-  print("%s <route> <segment> <frame number>" % sys.argv[0])
+  print(f"{sys.argv[0]} <route> <segment> <frame number>")
   print('example: ./fetch_image_from_route.py "02c45f73a2e5c6e9|2020-06-01--18-03-08" 3 500')
   exit(0)
 
@@ -18,7 +18,7 @@ segment = int(sys.argv[2])
 frame = int(sys.argv[3])
 
 url = 'https://api.commadotai.com/v1/route/'+sys.argv[1]+"/files"
-r = requests.get(url, headers={"Authorization": "JWT "+jwt})
+r = requests.get(url, headers={"Authorization": "JWT "+jwt}, timeout=10)
 assert r.status_code == 200
 print("got api response")
 
@@ -33,5 +33,5 @@ if frame >= fr.frame_count:
 im = Image.fromarray(fr.get(frame, count=1, pix_fmt="rgb24")[0])
 fn = "uxxx_"+route.replace("|", "_")+"_%d_%d.png" % (segment, frame)
 im.save(fn)
-print("saved %s" % fn)
+print(f"saved {fn}")
 

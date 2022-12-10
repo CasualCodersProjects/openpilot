@@ -5,7 +5,7 @@ import errno
 import signal
 
 
-def unblock_stdout():
+def unblock_stdout() -> None:
   # get a non-blocking stdout
   child_pid, child_pty = os.forkpty()
   if child_pid != 0:  # parent
@@ -29,10 +29,10 @@ def unblock_stdout():
 
       try:
         sys.stdout.write(dat.decode('utf8'))
-      except (OSError, IOError, UnicodeDecodeError):
+      except (OSError, UnicodeDecodeError):
         pass
 
     # os.wait() returns a tuple with the pid and a 16 bit value
-    # whose low byte is the signal number and whose high byte is the exit satus
+    # whose low byte is the signal number and whose high byte is the exit status
     exit_status = os.wait()[1] >> 8
     os._exit(exit_status)

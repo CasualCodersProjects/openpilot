@@ -4,7 +4,7 @@
 
 #include <QStackedLayout>
 
-#include "selfdrive/common/util.h"
+#include "common/util.h"
 #include "selfdrive/ui/qt/widgets/cameraview.h"
 
 class DriverViewScene : public QWidget {
@@ -24,7 +24,7 @@ protected:
 private:
   Params params;
   SubMaster sm;
-  QImage face_img;
+  QPixmap face_img;
   bool is_rhd = false;
   bool frame_updated = false;
 };
@@ -42,7 +42,7 @@ protected:
   void mouseReleaseEvent(QMouseEvent* e) override;
 
 private:
-  CameraViewWidget *cameraView;
+  CameraWidget *cameraView;
   DriverViewScene *scene;
   QStackedLayout *layout;
 };
